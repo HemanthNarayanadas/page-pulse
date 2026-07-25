@@ -1,0 +1,52 @@
+version: '3.9'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: page-pulse-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: page-pulse-backend
+    ports:
+      - '4000:4000'
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      CORS_ORIGIN: http://localhost:5173
+      REDIS_URL: redis://redis:6379
+      CACHE_TTL: 600
+      MAX_CONCURRENT_FETCHES: 5
+      FETCH_TIMEOUT_MS: 5000
+      RATE_LIMIT_WINDOW_MS: 3600000
+      RATE_LIMIT_MAX: 100
+      LOG_LEVEL: info
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: http://localhost:4000
+    container_name: page-pulse-frontend
+    ports:
+      - '5173:80'
+    depends_on:
+      - backend
+
+volumes:
+  redis-data:
